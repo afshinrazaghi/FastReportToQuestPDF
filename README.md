@@ -1,4 +1,4 @@
-# Lib To Generate PDF From FastReport by QuestPDF
+# Library To Generate PDF From FastReport by QuestPDF
 
 ## 1- Register Interface And Implementation
 services.AddScoped<IPdfGenerator, PdfGenerator>();
