@@ -90,6 +90,13 @@ namespace FastReportToQuestPDF
                                     DrawPicture(layerContainer, page, pic);
                                 });
                             }
+                            else if (obj is FastReport.LineObject line)
+                            {
+                                inner.Layer().ScaleToFit().Element(layerContainer =>
+                                {
+                                    DrawLine(layerContainer, page, line);
+                                });
+                            }
                         }
 
                         // REQUIRED: exactly one PrimaryLayer inside inner Layers
@@ -224,6 +231,30 @@ namespace FastReportToQuestPDF
                     break;
             }
 
+        }
+
+        private void DrawLine(IContainer container, ReportPage page, LineObject lineObject)
+        {
+            // ۱. محاسبه طول واقعی (وتر)
+            float actualLength = MathF.Sqrt(MathF.Pow(lineObject.Width, 2) + MathF.Pow(lineObject.Height, 2));
+
+            // ۲. محاسبه زاویه
+            float angleDegrees = MathF.Atan2(lineObject.Height, lineObject.Width) * (180 / MathF.PI);
+
+            // اگر خط Diagonal باشد (در فست‌ریپورت یعنی خط از پایین-چپ به بالا-راست)
+            //if (lineObject.Diagonal)
+            //{
+            //    angleDegrees = -angleDegrees;
+            //}
+
+            container
+                .TranslateX(ToPoints(lineObject.AbsLeft))
+                .TranslateY(ToPoints(lineObject.AbsTop))
+                // ما یک باکس با ارتفاع بسیار کم (ضخامت خط) و عرضی معادل طول کل خط می‌سازیم
+                .Width(ToPoints(actualLength))
+                .Height(ToPoints(lineObject.Border.Width))
+                .Rotate(angleDegrees)
+                .Background(ConvertColor(lineObject.Border.Color));
         }
 
         private QuestPDF.Infrastructure.Color ConvertColor(System.Drawing.Color c)
