@@ -9,11 +9,11 @@ using System.Text;
 
 namespace FastReportToQuestPDF
 {
-    public class Convertor : IConvertor
+    public class PdfGenerator : IPdfGenerator
     {
         private string? _unicodeFontName;
         private string? _emojiFontName;
-        public Convertor()
+        public PdfGenerator()
         {
             QuestPDF.Settings.License = LicenseType.Community;
         }

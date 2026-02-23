@@ -5,7 +5,7 @@ using System.Text;
 
 namespace FastReportToQuestPDF
 {
-    public interface IConvertor
+    public interface IPdfGenerator
     {
         byte[] GeneratePDF(WebReport report);
         byte[] GeneratePDF(WebReport report, string? unicodeFontName);
