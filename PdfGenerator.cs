@@ -3,6 +3,7 @@ using FastReport.Web;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using SkiaSharp;
+using System.Globalization;
 using System.Text;
 
 namespace FastReportToQuestPDF
@@ -93,6 +94,13 @@ namespace FastReportToQuestPDF
                                 inner.Layer().ScaleToFit().Element(layerContainer =>
                                 {
                                     DrawLine(layerContainer, page, line);
+                                });
+                            }
+                            else if (obj is FastReport.ShapeObject shape)
+                            {
+                                inner.Layer().ScaleToFit().Element(layerContainer =>
+                                {
+                                    DrawShape(layerContainer, page, shape);
                                 });
                             }
                         }
@@ -231,6 +239,7 @@ namespace FastReportToQuestPDF
 
         }
 
+        #region Draw Line
         private void DrawLine(IContainer container, ReportPage page, LineObject lineObject)
         {
             // 1. Precise Conversion to Points
@@ -272,7 +281,7 @@ namespace FastReportToQuestPDF
             float lineStartX = hasStartArrow ? arrowLen : 0;
             float lineEndX = hasEndArrow ? actualLength - arrowLen : actualLength;
 
-            string hexColor = ConvertColor(lineObject.Border.Color);
+            string hexColor = ConvertToSvgColor(lineObject.Border.Color);
 
             // 8. Generate SVG
             string svgContent = GenerateSvgLine(actualLength, svgHeight, strokeWidth, hexColor,
@@ -337,11 +346,133 @@ namespace FastReportToQuestPDF
             sb.AppendLine("</svg>");
             return sb.ToString();
         }
+        #endregion
 
+
+        private void DrawShape(IContainer container, ReportPage page, ShapeObject shapeObject)
+        {
+            // 1. Convert dimensions to Points
+            float widthPts = ToPoints(shapeObject.Width);
+            float heightPts = ToPoints(shapeObject.Height);
+            float strokeWidth = ToPoints(shapeObject.Border.Width);
+
+            // 2. Get Colors
+            // Assuming you have a helper that returns "#RRGGBB" or "none"
+            string borderColor = ConvertToSvgColor(shapeObject.Border.Color);
+            string fillColor = ConvertToSvgColor(shapeObject.FillColor); // Helper needs to handle "Transparent" -> "none"
+            if (shapeObject.FillColor.Name == "Transparent")
+                fillColor = "none";
+            // 3. Handle Border Style (Dash, Dot, etc.)
+            string dashArray = GetDashArray(shapeObject.Border.Style, strokeWidth);
+
+            string svgContent = "";
+
+            if (shapeObject.Shape == ShapeKind.Rectangle)
+            {
+                svgContent = GenerateSvgRect(widthPts, heightPts, strokeWidth, borderColor, fillColor, dashArray, 0);
+            }
+
+            else if (shapeObject.Shape == ShapeKind.RoundRectangle)
+            {
+                float curveRadius = Math.Min(widthPts, heightPts) * 0.15f; // Approx 15% rounding if not specified
+                svgContent = GenerateSvgRect(widthPts, heightPts, strokeWidth, borderColor, fillColor, dashArray, curveRadius);
+
+            }
+            else
+            {
+                return;
+            }
+
+            // 5. Generate SVG
+
+            // 6. Draw in QuestPDF
+            container
+                .TranslateX(ToPoints(shapeObject.AbsLeft))
+                .TranslateY(ToPoints(shapeObject.AbsTop))
+                // Rotate around center if needed (FastReport objects rotate around center usually)
+                .Width(widthPts)
+                .Height(heightPts)
+                .Svg(svgContent);
+        }
+
+
+        #region Draw Rectanble
+        private string GenerateSvgRect(float width, float height, float strokeWidth,
+                                      string strokeColor, string fillColor, string dashArray, float radius)
+        {
+            string F(float val) => val.ToString("0.###", CultureInfo.InvariantCulture);
+
+            // MATH FIX FOR PRECISION:
+            // In SVG, the stroke is drawn on the center of the line. 
+            // If we draw a rect from 0 to 100, the border will spill outside (to -1 and 101).
+            // We must inset the rectangle by half the stroke width so it fits perfectly inside the box.
+            float halfStroke = strokeWidth / 2f;
+            float rectX = halfStroke;
+            float rectY = halfStroke;
+            float rectW = width - strokeWidth;
+            float rectH = height - strokeWidth;
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"<svg viewBox=\"0 0 {F(width)} {F(height)}\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+            sb.Append($"<rect x=\"{F(rectX)}\" y=\"{F(rectY)}\" width=\"{F(rectW)}\" height=\"{F(rectH)}\" ");
+
+            // Appearance
+            sb.Append($"fill=\"{fillColor}\" ");
+            sb.Append($"stroke=\"{strokeColor}\" ");
+            sb.Append($"stroke-width=\"{F(strokeWidth)}\" ");
+
+            // Dashed Borders
+            if (!string.IsNullOrEmpty(dashArray))
+            {
+                sb.Append($"stroke-dasharray=\"{dashArray}\" ");
+            }
+
+            // Rounded Corners
+            if (radius > 0)
+            {
+                sb.Append($"rx=\"{F(radius)}\" ry=\"{F(radius)}\" ");
+            }
+
+            sb.AppendLine("/>");
+            sb.AppendLine("</svg>");
+
+            return sb.ToString();
+        }
+
+        #endregion
+
+        private string GetDashArray(LineStyle style, float width)
+        {
+            string F(float val) => val.ToString("0.###", CultureInfo.InvariantCulture);
+
+            // Dash patterns relative to stroke width usually look best
+            return style switch
+            {
+                LineStyle.Solid => "",
+                // "Dash" -> 5px line, 3px gap (scaled by width)
+                LineStyle.Dash => $"{F(width * 4)},{F(width * 2)}",
+                // "Dot" -> 1px line, 2px gap
+                LineStyle.Dot => $"{F(width)},{F(width * 2)}",
+                // "DashDot" -> Dash, Gap, Dot, Gap
+                LineStyle.DashDot => $"{F(width * 4)},{F(width * 2)},{F(width)},{F(width * 2)}",
+                // "Double" is not natively supported by SVG stroke, usually treated as Solid or two rects.
+                LineStyle.Double => "",
+                _ => ""
+            };
+        }
 
         private QuestPDF.Infrastructure.Color ConvertColor(System.Drawing.Color c)
         {
             return QuestPDF.Infrastructure.Color.FromARGB(c.A, c.R, c.G, c.B);
+        }
+
+        private string ConvertToSvgColor(System.Drawing.Color c)
+        {
+            if (c.Name == "Transparent")
+                return "none";
+            return QuestPDF.Infrastructure.Color.FromARGB(c.A, c.R, c.G, c.B);
+
         }
 
         private bool IsLatin(char c)
