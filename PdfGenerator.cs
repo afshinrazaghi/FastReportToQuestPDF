@@ -348,7 +348,6 @@ namespace FastReportToQuestPDF
         }
         #endregion
 
-
         private void DrawShape(IContainer container, ReportPage page, ShapeObject shapeObject)
         {
             // 1. Convert dimensions to Points
@@ -371,12 +370,14 @@ namespace FastReportToQuestPDF
             {
                 svgContent = GenerateSvgRect(widthPts, heightPts, strokeWidth, borderColor, fillColor, dashArray, 0);
             }
-
             else if (shapeObject.Shape == ShapeKind.RoundRectangle)
             {
                 float curveRadius = Math.Min(widthPts, heightPts) * 0.15f; // Approx 15% rounding if not specified
                 svgContent = GenerateSvgRect(widthPts, heightPts, strokeWidth, borderColor, fillColor, dashArray, curveRadius);
-
+            }
+            else if (shapeObject.Shape == ShapeKind.Ellipse)
+            {
+                svgContent = GenerateSvgEllipse(widthPts, heightPts, strokeWidth, borderColor, fillColor, dashArray);
             }
             else
             {
@@ -394,7 +395,6 @@ namespace FastReportToQuestPDF
                 .Height(heightPts)
                 .Svg(svgContent);
         }
-
 
         #region Draw Rectanble
         private string GenerateSvgRect(float width, float height, float strokeWidth,
@@ -442,6 +442,43 @@ namespace FastReportToQuestPDF
 
         #endregion
 
+        #region Draw Ellipse
+        private string GenerateSvgEllipse(float width, float height, float strokeWidth,
+                                  string strokeColor, string fillColor, string dashArray)
+        {
+            string F(float val) => val.ToString("0.###", CultureInfo.InvariantCulture);
+
+            // MATH FIX FOR PRECISION:
+            // Center point is exactly in the middle of the bounding box.
+            float cx = width / 2f;
+            float cy = height / 2f;
+
+            // The radius must be reduced by half the stroke width so the border doesn't bleed outside the SVG viewBox.
+            // Max(0, ...) prevents negative radii if the stroke is thicker than the shape itself.
+            float rx = Math.Max(0, (width - strokeWidth) / 2f);
+            float ry = Math.Max(0, (height - strokeWidth) / 2f);
+
+            var sb = new StringBuilder();
+            sb.AppendLine($"<svg viewBox=\"0 0 {F(width)} {F(height)}\" xmlns=\"http://www.w3.org/2000/svg\">");
+
+            sb.Append($"<ellipse cx=\"{F(cx)}\" cy=\"{F(cy)}\" rx=\"{F(rx)}\" ry=\"{F(ry)}\" ");
+
+            sb.Append($"fill=\"{fillColor}\" ");
+            sb.Append($"stroke=\"{strokeColor}\" ");
+            sb.Append($"stroke-width=\"{F(strokeWidth)}\" ");
+
+            if (!string.IsNullOrEmpty(dashArray))
+            {
+                sb.Append($"stroke-dasharray=\"{dashArray}\" ");
+            }
+
+            sb.AppendLine("/>");
+            sb.AppendLine("</svg>");
+
+            return sb.ToString();
+        }
+        #endregion
+
         private string GetDashArray(LineStyle style, float width)
         {
             string F(float val) => val.ToString("0.###", CultureInfo.InvariantCulture);
@@ -471,7 +508,7 @@ namespace FastReportToQuestPDF
         {
             if (c.Name == "Transparent")
                 return "none";
-            return QuestPDF.Infrastructure.Color.FromARGB(c.A, c.R, c.G, c.B);
+            return ConvertColor(c);
 
         }
 
@@ -481,77 +518,6 @@ namespace FastReportToQuestPDF
                 (c >= 'A' && c <= 'Z') ||
                 (c >= 'a' && c <= 'z');
         }
-
-        private IEnumerable<(string Text, bool IsLatin)> SplitByScript(string input)
-        {
-            if (string.IsNullOrEmpty(input))
-                yield break;
-
-            var sb = new StringBuilder();
-            bool currentIsLatin = IsLatin(input[0]);
-
-            foreach (var ch in input)
-            {
-                bool isLatin = IsLatin(ch);
-
-                if (isLatin != currentIsLatin)
-                {
-                    yield return (sb.ToString(), currentIsLatin);
-                    sb.Clear();
-                    currentIsLatin = isLatin;
-                }
-
-                sb.Append(ch);
-            }
-
-            yield return (sb.ToString(), currentIsLatin);
-        }
-
-
-        private void DrawArrowHead(SKCanvas canvas, float x1, float y1, float x2, float y2, SKPaint paint)
-        {
-            float arrowLength = 10f;          // طول بال فلش
-            float arrowAngle = MathF.PI / 6;  // 30 درجه
-
-            float angle = MathF.Atan2(y2 - y1, x2 - x1);
-
-            float x3 = x2 - arrowLength * MathF.Cos(angle - arrowAngle);
-            float y3 = y2 - arrowLength * MathF.Sin(angle - arrowAngle);
-
-            float x4 = x2 - arrowLength * MathF.Cos(angle + arrowAngle);
-            float y4 = y2 - arrowLength * MathF.Sin(angle + arrowAngle);
-
-            canvas.DrawLine(x2, y2, x3, y3, paint);
-            canvas.DrawLine(x2, y2, x4, y4, paint);
-        }
-
-        private void DrawFilledArrowHead(SKCanvas canvas, float x1, float y1, float x2, float y2, float size, SKColor color)
-        {
-            float angle = MathF.Atan2(y2 - y1, x2 - x1);
-
-            float x3 = x2 - size * MathF.Cos(angle - MathF.PI / 6);
-            float y3 = y2 - size * MathF.Sin(angle - MathF.PI / 6);
-
-            float x4 = x2 - size * MathF.Cos(angle + MathF.PI / 6);
-            float y4 = y2 - size * MathF.Sin(angle + MathF.PI / 6);
-
-            using var path = new SKPath();
-            path.MoveTo(x2, y2);
-            path.LineTo(x3, y3);
-            path.LineTo(x4, y4);
-            path.Close();
-
-            using var paint = new SKPaint
-            {
-                Color = color,
-                Style = SKPaintStyle.Fill,
-                IsAntialias = true
-            };
-
-            canvas.DrawPath(path, paint);
-        }
-
-
 
         #endregion
     }
