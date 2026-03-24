@@ -3,6 +3,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -124,6 +125,41 @@ namespace FastReportToQuestPDF
             return
                 (c >= 'A' && c <= 'Z') ||
                 (c >= 'a' && c <= 'z');
+        }
+
+        public static byte[] RenderFastReportObjectToImage(FastReport.ReportComponentBase component, float dpi = 300f)
+        {
+            // محاسبه ابعاد پیکسلی بر اساس DPI
+            int widthPx = (int)Math.Ceiling(component.Width / 96f * dpi);
+            int heightPx = (int)Math.Ceiling(component.Height / 96f * dpi);
+
+            if (widthPx <= 0) widthPx = 1;
+            if (heightPx <= 0) heightPx = 1;
+
+            using (var bmp = new Bitmap(widthPx, heightPx))
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(System.Drawing.Color.Transparent);
+
+                // مقیاس‌دهی Graphics برای تطابق با DPI بالا
+                g.ScaleTransform(dpi / 96f, dpi / 96f);
+
+                // 2. بوم نقاشی را به اندازه مختصات مطلق شیء به عقب می‌کشیم
+                // این کار باعث می‌شود شیء هر کجا که در گزارش هست، دقیقاً روی نقطه 0,0 در تصویر ما رسم شود
+                g.TranslateTransform(-component.AbsLeft, -component.AbsTop);
+
+                // استفاده از موتور رسم خود FastReport
+                var e = new FastReport.Utils.FRPaintEventArgs(g, 1.0f, 1.0f, component.Report.GraphicCache);
+
+                component.Draw(e);
+
+
+                using (var ms = new MemoryStream())
+                {
+                    bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    return ms.ToArray();
+                }
+            }
         }
     }
 }

@@ -8,11 +8,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace FastReportToQuestPDF
+namespace FastReportToQuestPDF.Drawers
 {
-    public class Table
+    public class TableDrawer
     {
-        public static void DrawTable(IContainer container, ReportPage page, TableObject frTable)
+        public static void Draw(IContainer container, ReportPage page, TableObject frTable)
         {
             if (frTable == null || frTable.RowCount == 0 || frTable.ColumnCount == 0) return;
 
