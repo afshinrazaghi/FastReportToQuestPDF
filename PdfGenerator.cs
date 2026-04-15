@@ -156,8 +156,8 @@ namespace FastReportToQuestPDF
                                 inner.Layer().ScaleToFit().Element(layerContainer =>
                                 {
                                     layerContainer
-                                        .TranslateX(component.AbsLeft)
-                                        .TranslateY(component.AbsTop)
+                                        .TranslateX(Helpers.ToPoints(component.AbsLeft))
+                                        .TranslateY(Helpers.ToPoints(component.AbsTop))
                                         .Width(Helpers.ToPoints(component.Width))
                                         .Height(Helpers.ToPoints(component.Height))
                                         .Image(image);
